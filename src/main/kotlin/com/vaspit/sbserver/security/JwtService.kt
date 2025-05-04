@@ -1,5 +1,6 @@
 package com.vaspit.sbserver.security
 
+import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
@@ -17,13 +18,13 @@ class JwtService(
 
     fun generateAccessToken(userId: String): String = generateToken(
         userId = userId,
-        type = "access",
+        type = ACCESS_TOKEN_TYPE,
         expiry = accessTokenValidityMs
     )
 
     fun generateRefreshToken(userId: String): String = generateToken(
         userId = userId,
-        type = "refresh",
+        type = REFRESH_TOKEN_TYPE,
         expiry = refreshTokenValidityMs
     )
 
@@ -37,10 +38,50 @@ class JwtService(
 
         return Jwts.builder()
             .subject(userId)
-            .claim("type", type)
+            .claim(CLAIM_TYPE, type)
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(secretKey, Jwts.SIG.HS256)
             .compact()
+    }
+
+    fun validateAccessToken(token: String): Boolean {
+        val claims = parseAllClaims(token) ?: return false
+        val type = claims[CLAIM_TYPE] as? String ?: return false
+        return type == ACCESS_TOKEN_TYPE
+    }
+    fun validateRefreshToken(token: String): Boolean {
+        val claims = parseAllClaims(token) ?: return false
+        val type = claims[CLAIM_TYPE] as? String ?: return false
+        return type == REFRESH_TOKEN_TYPE
+    }
+
+    private fun parseAllClaims(token: String): Claims? {
+        return try {
+            val rawToken = if (token.startsWith(BEARER_PREFIX)) token.removePrefix(BEARER_PREFIX) else token
+            Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(rawToken)
+                .payload
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * @return userId from token as [String]
+     * @throws [IllegalArgumentException] if token is invalid
+     */
+    fun getUserIdFromToken(token: String): String {
+        val claims = parseAllClaims(token) ?: throw IllegalArgumentException("Invalid token.")
+        return claims.subject
+    }
+
+    companion object {
+        private const val ACCESS_TOKEN_TYPE = "access"
+        const val BEARER_PREFIX = "Bearer "
+        private const val CLAIM_TYPE = "type"
+        private const val REFRESH_TOKEN_TYPE = "refresh"
     }
 }

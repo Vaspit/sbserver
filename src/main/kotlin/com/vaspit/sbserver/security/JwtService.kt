@@ -1,20 +1,23 @@
 package com.vaspit.sbserver.security
 
+import com.vaspit.sbserver.utils.INVALID_TOKEN
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatusCode
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.util.*
 
 @Service
 class JwtService(
-    @Value("JWT_SECRET_BASE64") private val jwtSecret: String
+    @Value("\${jwtSecret}") private val jwtSecret: String
 ) {
 
     private val secretKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret))
     private val accessTokenValidityMs = 15L * 60L * 1000L // 15 min
-    val refreshTokenValidityMs = 30L * 24L * 60L * 1000L // 30 days
+    val refreshTokenValidityMs = 30L * 24L * 60L * 60L * 1000L // 30 days
 
     fun generateAccessToken(userId: String): String = generateToken(
         userId = userId,
@@ -74,8 +77,9 @@ class JwtService(
      * @throws [IllegalArgumentException] if token is invalid
      */
     fun getUserIdFromToken(token: String): String {
-        val claims = parseAllClaims(token) ?: throw IllegalArgumentException("Invalid token.")
-        return claims.subject
+        val claims = parseAllClaims(token)
+            ?: throw ResponseStatusException(HttpStatusCode.valueOf(401), INVALID_TOKEN)
+            return claims.subject
     }
 
     companion object {

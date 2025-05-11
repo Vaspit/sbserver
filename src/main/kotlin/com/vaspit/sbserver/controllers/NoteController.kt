@@ -2,17 +2,14 @@ package com.vaspit.sbserver.controllers
 
 import com.vaspit.sbserver.database.model.Note
 import com.vaspit.sbserver.database.repository.NoteRepository
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import org.bson.types.ObjectId
-import org.springframework.web.bind.annotation.DeleteMapping
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.web.bind.annotation.*
 import java.time.Instant
 
+@Suppress("UNUSED")
 @RestController
 @RequestMapping("/notes")
 class NotesController(
@@ -21,6 +18,7 @@ class NotesController(
 
     data class NoteRequest(
         val id: String?,
+        @field:NotBlank(message = "Title can't be blank")
         val title: String,
         val content: String,
         val color: Long,
@@ -36,8 +34,9 @@ class NotesController(
 
     @PostMapping
     fun save(
-        @RequestBody body: NoteRequest
+        @Valid @RequestBody body: NoteRequest
     ): NoteResponse {
+        val ownerId = SecurityContextHolder.getContext().authentication.principal as String
         val note = repository.save(
             Note(
                 id = body.id?.let { ObjectId(it) } ?: ObjectId.get(),
@@ -45,7 +44,7 @@ class NotesController(
                 content = body.content,
                 color = body.color,
                 createdAt = Instant.now(),
-                ownerId = ObjectId()
+                ownerId = ObjectId(ownerId)
             )
         )
 
@@ -53,9 +52,8 @@ class NotesController(
     }
 
     @GetMapping
-    fun findByOwnerId(
-        @RequestParam(required = true) ownerId: String
-    ): List<NoteResponse> {
+    fun findByOwnerId(): List<NoteResponse> {
+        val ownerId = SecurityContextHolder.getContext().authentication.principal as String
         return repository.findByOwnerId(ObjectId(ownerId)).map {
             it.toNoteResponse()
         }
@@ -65,7 +63,14 @@ class NotesController(
     fun deleteById(
         @PathVariable id: String
     ) {
-        repository.deleteById(ObjectId(id))
+        val note = repository.findById(ObjectId(id)).orElseThrow {
+            IllegalStateException("There is no note with such id: $id")
+        }
+        val ownerId = SecurityContextHolder.getContext().authentication.principal as String
+
+        if (note.ownerId.toHexString() == ownerId) {
+            repository.deleteById(ObjectId(id))
+        }
     }
 
     private fun Note.toNoteResponse() = NoteResponse(

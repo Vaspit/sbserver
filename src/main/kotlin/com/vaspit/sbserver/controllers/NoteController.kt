@@ -2,6 +2,8 @@ package com.vaspit.sbserver.controllers
 
 import com.vaspit.sbserver.database.model.Note
 import com.vaspit.sbserver.database.repository.NoteRepository
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import org.bson.types.ObjectId
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
@@ -16,6 +18,7 @@ class NotesController(
 
     data class NoteRequest(
         val id: String?,
+        @field:NotBlank(message = "Title can't be blank")
         val title: String,
         val content: String,
         val color: Long,
@@ -31,7 +34,7 @@ class NotesController(
 
     @PostMapping
     fun save(
-        @RequestBody body: NoteRequest
+        @Valid @RequestBody body: NoteRequest
     ): NoteResponse {
         val ownerId = SecurityContextHolder.getContext().authentication.principal as String
         val note = repository.save(

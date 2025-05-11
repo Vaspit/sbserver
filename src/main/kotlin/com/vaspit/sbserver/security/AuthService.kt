@@ -8,9 +8,12 @@ import com.vaspit.sbserver.utils.BAD_CREDENTIALS_EXCEPTION
 import com.vaspit.sbserver.utils.INVALID_REFRESH_TOKEN
 import com.vaspit.sbserver.utils.REFRESH_TOKEN_NOT_RECOGNIZED
 import org.bson.types.ObjectId
+import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatusCode
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.*
@@ -28,6 +31,12 @@ class AuthService(
     )
 
     fun register(email: String, password: String): User {
+        val user = userRepository.findByEmail(email.trim())
+
+        if (user != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "A user with that email is already exists.")
+        }
+
         return userRepository.save(
             User(
                 email = email,
@@ -57,17 +66,17 @@ class AuthService(
     @Transactional
     fun refresh(refreshToken: String): TokenPair {
         if (!jwtService.validateRefreshToken(refreshToken)) {
-            throw IllegalArgumentException(INVALID_REFRESH_TOKEN)
+            throw ResponseStatusException(HttpStatusCode.valueOf(401), INVALID_REFRESH_TOKEN)
         }
 
         val userId = jwtService.getUserIdFromToken(refreshToken)
         val user = userRepository.findById(ObjectId(userId)).orElseThrow {
-            IllegalArgumentException(INVALID_REFRESH_TOKEN)
+            ResponseStatusException(HttpStatusCode.valueOf(401), INVALID_REFRESH_TOKEN)
         }
 
         val hashedToken = getHashedToken(refreshToken)
         refreshTokenRepository.findByUserIdAndHashedToken(user.id, hashedToken)
-            ?: throw IllegalArgumentException(REFRESH_TOKEN_NOT_RECOGNIZED)
+            ?: throw ResponseStatusException(HttpStatusCode.valueOf(401), REFRESH_TOKEN_NOT_RECOGNIZED)
 
         refreshTokenRepository.deleteByUserIdAndHashedToken(user.id, hashedToken)
 
